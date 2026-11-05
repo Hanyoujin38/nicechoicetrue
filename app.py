@@ -92,33 +92,30 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 </style>
 """, unsafe_allow_html=True)
 
-    title, settings = st.columns([3.4, 1.1], vertical_alignment="center")
-    with title:
-        st.markdown('<div class="hero">⚖️ 선택 한눈에</div><div class="sub">비용과 만족을 입력하면, 비교는 바로 아래에.</div>', unsafe_allow_html=True)
-    with settings:
-        with st.popover("⚙ 설정", use_container_width=True):
-            st.markdown("**비교 설정**")
-            count = st.selectbox("선택지 수", [2, 3, 4], index=0, key="choice_count")
-            rate = int(st.number_input("만족도 1점의 금액 (원)", min_value=1, max_value=1_000_000_000, value=10000, step=1000, key="point_rate"))
-            st.caption("모든 선택지에 같은 환산액을 적용합니다. 원 단위 정수로 계산합니다.")
-            st.markdown("**QR로 공유**")
-            app_url = st.text_input("배포된 앱 주소", placeholder="https://your-app.streamlit.app", key="share_url").strip()
-            if app_url:
-                parsed = urlparse(app_url)
-                if parsed.scheme in ("https", "http") and parsed.hostname and not parsed.username and not parsed.password:
-                    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=4)
-                    qr.add_data(app_url)
-                    qr.make(fit=True)
-                    buf = BytesIO()
-                    qr.make_image(fill_color="#18243B", back_color="white").save(buf, format="PNG")
-                    image = buf.getvalue()
-                    st.image(image, width=180)
-                    st.download_button("QR 이미지 다운로드", image, file_name="choice-app-qr.png", mime="image/png")
-                    st.caption("QR은 앱 접속용입니다. 입력한 선택지는 QR에 포함되지 않습니다.")
-                else:
-                    st.warning("http:// 또는 https://로 시작하는 올바른 배포 주소를 입력하세요.")
+    st.markdown('<div class="hero">⚖️ 선택 한눈에</div><div class="sub">비용과 만족을 입력하면, 비교는 바로 아래에.</div>', unsafe_allow_html=True)
+    with st.expander("⚙ 설정 · 선택지 수 / 1점당 금액 / QR", expanded=True):
+        st.markdown("**비교 설정**")
+        count = st.selectbox("선택지 수", [2, 3, 4], index=0, key="choice_count")
+        rate = int(st.number_input("만족도 1점의 금액 (원)", min_value=1, max_value=1_000_000_000, value=10000, step=1000, key="point_rate"))
+        st.caption("모든 선택지에 같은 환산액을 적용합니다. 원 단위 정수로 계산합니다.")
+        st.markdown("**QR로 공유**")
+        app_url = st.text_input("배포된 앱 주소", placeholder="https://your-app.streamlit.app", key="share_url").strip()
+        if app_url:
+            parsed = urlparse(app_url)
+            if parsed.scheme in ("https", "http") and parsed.hostname and not parsed.username and not parsed.password:
+                qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=4)
+                qr.add_data(app_url)
+                qr.make(fit=True)
+                buf = BytesIO()
+                qr.make_image(fill_color="#18243B", back_color="white").save(buf, format="PNG")
+                image = buf.getvalue()
+                st.image(image, width=180)
+                st.download_button("QR 이미지 다운로드", image, file_name="choice-app-qr.png", mime="image/png")
+                st.caption("QR은 앱 접속용입니다. 입력한 선택지는 QR에 포함되지 않습니다.")
             else:
-                st.caption("GitHub에 두 파일을 올리고 Streamlit Community Cloud에서 app.py를 배포한 뒤, 공개 주소를 입력하세요.")
+                st.warning("http:// 또는 https://로 시작하는 올바른 배포 주소를 입력하세요.")
+        else:
+            st.caption("GitHub에 두 파일을 올리고 Streamlit Community Cloud에서 app.py를 배포한 뒤, 공개 주소를 입력하세요.")
 
     a, b, c = st.columns([1.15, 1.35, 1])
     a.markdown('<div class="colhead">선택지</div>', unsafe_allow_html=True)
@@ -165,7 +162,7 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 
 일반적인 비용 대비 만족 비교를 원한다면, 편익을 ‘환산 만족’만으로 정의하고 비용을 차감하는 방식이 더 적합합니다. 이 앱은 요청하신 합산식을 그대로 사용합니다.
 
-**모바일 안내:** 기본 2개, 최대 4개를 압축 배치했습니다. 아주 작은 화면·가로 모드·확대 글꼴·키보드 표시 중에는 스크롤이 생길 수 있습니다. 설정과 설명은 현재 화면 위에 열립니다.
+**모바일 안내:** 기본 2개, 최대 4개를 압축 배치했습니다. 아주 작은 화면·가로 모드·확대 글꼴·키보드 표시 중에는 스크롤이 생길 수 있습니다. 설정은 화면 안에서 펼쳐 바꿀 수 있고, 설명은 팝업으로 열립니다. 설정을 접으면 더 컴팩트하게 비교할 수 있습니다.
 
 **배포:** GitHub 저장소 루트에 `app.py`, `requirements.txt` → Streamlit Community Cloud에서 해당 저장소와 `app.py` 선택 → 배포 주소를 설정에 입력 → QR 다운로드. GitHub 자체는 Python 앱 실행 서버가 아니므로 Streamlit 배포가 필요합니다.
 
