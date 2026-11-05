@@ -54,7 +54,23 @@ def main() -> None:
 .block-container {max-width:600px; padding:0.65rem 0.7rem 0.65rem !important;}
 header[data-testid="stHeader"] {height:0; background:transparent;}
 [data-testid="stToolbar"], #MainMenu, footer {display:none;}
-[data-testid="stVerticalBlock"] {gap:0.32rem;}
+/* 각 출력 영역에 실제 높이와 간격을 확보해 다음 입력/카드와 겹치지 않게 합니다. */
+[data-testid="stVerticalBlock"] {gap:0.65rem;}
+[data-testid="stMarkdownContainer"] {display:flow-root; height:auto; overflow:visible;}
+[data-testid="stMarkdownContainer"] .hero,
+[data-testid="stMarkdownContainer"] .sub,
+[data-testid="stMarkdownContainer"] .colhead,
+[data-testid="stMarkdownContainer"] .winner,
+[data-testid="stMarkdownContainer"] .result,
+[data-testid="stMarkdownContainer"] .note {box-sizing:border-box; position:relative; height:auto;}
+[data-testid="stMarkdownContainer"] .colhead {padding:2px 0 4px; line-height:1.5; min-height:23px;}
+[data-testid="stMarkdownContainer"] .winner,
+[data-testid="stMarkdownContainer"] .result {margin:0;}
+[data-testid="stMarkdownContainer"] .note {margin:0; padding:3px 0;}
+[data-testid="stMarkdownContainer"] .metric {line-height:1.5;}
+[data-testid="stMarkdownContainer"] .metric strong {line-height:1.5;}
+[data-testid="stMarkdownContainer"] .sub {line-height:1.5;}
+[data-testid="stMarkdownContainer"] .hero + .sub {padding-top:3px;}
 [data-testid="stHorizontalBlock"] {flex-wrap:nowrap !important; gap:0.35rem !important;}
 [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {min-width:0 !important; width:unset !important; flex-shrink:1 !important;}
 [data-testid="stTextInput"] input, [data-testid="stNumberInput"] input {font-size:14px; padding-left:7px; padding-right:3px; min-height:36px;}
