@@ -55,7 +55,7 @@ def main() -> None:
 header[data-testid="stHeader"] {height:0; background:transparent;}
 [data-testid="stToolbar"], #MainMenu, footer {display:none;}
 /* 각 출력 영역에 실제 높이와 간격을 확보해 다음 입력/카드와 겹치지 않게 합니다. */
-[data-testid="stVerticalBlock"] {gap:0.65rem;}
+/* Streamlit 기본 블록 간격을 유지합니다. 전역 gap 축소는 하지 않습니다. */
 [data-testid="stMarkdownContainer"] {display:flow-root; height:auto; overflow:visible;}
 [data-testid="stMarkdownContainer"] .hero,
 [data-testid="stMarkdownContainer"] .sub,
@@ -92,7 +92,9 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 </style>
 """, unsafe_allow_html=True)
 
-    st.markdown('<div class="hero">⚖️ 선택 한눈에</div><div class="sub">비용과 만족을 입력하면, 비교는 바로 아래에.</div>', unsafe_allow_html=True)
+    # 제목과 안내문을 별도 기본 위젯으로 렌더링해 실제 높이를 확보합니다.
+    st.title("⚖️ 선택 한눈에")
+    st.caption("비용과 만족을 입력하면, 비교는 바로 아래에.")
     with st.expander("⚙ 설정 · 선택지 수 / 1점당 금액 / QR", expanded=True):
         st.markdown("**비교 설정**")
         count = st.selectbox("선택지 수", [2, 3, 4], index=0, key="choice_count")
@@ -147,7 +149,7 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 <div class="result-top"><span class="choice-name">{name}{mark}</span><span>이윤 {prefix}{money(profit)}</span></div>
 <div class="metrics"><div class="metric">편익<strong>{money(row['benefit'])}</strong></div><div class="metric">암묵적 비용<strong>{money(row['implicit_cost'])}</strong></div><div class="metric">기회비용<strong>{money(row['opportunity_cost'])}</strong></div></div></div>''', unsafe_allow_html=True)
 
-    st.markdown('<div class="note">요청한 합산식에서는 비용이 순편익에서 상쇄되어, 추천 순위는 만족도로 결정됩니다.</div>', unsafe_allow_html=True)
+    st.caption("요청한 합산식에서는 비용이 순편익에서 상쇄되어, 추천 순위는 만족도로 결정됩니다.")
     with st.popover("ⓘ 계산 기준", use_container_width=True):
         st.markdown("""**하나만 선택하는 상호 배타적인 대안**을 비교합니다.
 
