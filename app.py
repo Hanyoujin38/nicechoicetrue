@@ -9,6 +9,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 import html
 import random
+import time
 from urllib.parse import urlparse
 
 import qrcode
@@ -95,7 +96,20 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 """, unsafe_allow_html=True)
 
     # 제목과 안내문을 별도 기본 위젯으로 렌더링해 실제 높이를 확보합니다.
-    st.title("⚖️ 합리적 선택 도우미!")
+    # 세션의 첫 접속에만 제목을 2초 표시하고, 이후 입력 재실행에서는 생략합니다.
+    if not st.session_state.get("intro_shown", False):
+        intro = st.empty()
+        with intro.container():
+            st.markdown(
+                '<div style="min-height:70vh;display:flex;align-items:center;'
+                'justify-content:center;text-align:center;font-size:clamp(24px,7vw,36px);'
+                'font-weight:800;line-height:1.5;overflow-wrap:anywhere;">'
+                '⚖️ 합리적 선택 도우미!</div>',
+                unsafe_allow_html=True,
+            )
+        time.sleep(2)
+        intro.empty()
+        st.session_state["intro_shown"] = True
     st.caption("비용과 만족을 입력하면, 비교는 바로 아래에.")
     with st.expander("⚙ 설정 · 선택지 수 / 1점당 금액 / QR", expanded=False):
         st.markdown("**비교 설정**")
