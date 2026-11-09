@@ -8,6 +8,7 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 import html
+import random
 from urllib.parse import urlparse
 
 import qrcode
@@ -15,7 +16,7 @@ import streamlit as st
 
 
 def compare_choices(choices: list[dict], won_per_point: int) -> list[dict]:
-    """편익=C+S×환산액, 암묵적 비용=max(다른 대안의 편익-C).
+    """편익=S×환산액, 암묵적 비용=max(다른 대안의 편익-C).
     서로 배타적인 대안 중 하나를 고르는 상황, 공통 환산액을 가정합니다.
     명시적 비용 및 환산액은 음수가 아닌 원 단위 정수입니다.
     """
@@ -29,10 +30,11 @@ def compare_choices(choices: list[dict], won_per_point: int) -> list[dict]:
         satisfaction = Decimal(str(choice["satisfaction"]))
         if not isinstance(cost, int) or cost < 0 or not 1 <= satisfaction <= 10:
             raise ValueError("비용은 0원 이상의 정수, 만족도는 1~10이어야 합니다.")
-        net = int((satisfaction * won_per_point).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        benefit = int((satisfaction * won_per_point).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        net = benefit - cost
         rows.append({"index": index, "name": str(choice["name"]).strip() or f"선택 {index + 1}",
                      "cost": cost, "satisfaction": float(satisfaction),
-                     "net_benefit": net, "benefit": cost + net})
+                     "net_benefit": net, "benefit": benefit})
     for row in rows:
         implicit = max(other["net_benefit"] for other in rows if other["index"] != row["index"])
         row["implicit_cost"] = implicit
@@ -47,7 +49,7 @@ def money(value: int) -> str:
 
 
 def main() -> None:
-    st.set_page_config(page_title="선택 한눈에", page_icon="⚖️", layout="centered", initial_sidebar_state="collapsed")
+    st.set_page_config(page_title="합리적 선택 도우미!", page_icon="⚖️", layout="centered", initial_sidebar_state="collapsed")
     st.markdown("""
 <style>
 .stApp {background:#F7F9FC; color:#18243B;}
@@ -93,12 +95,12 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 """, unsafe_allow_html=True)
 
     # 제목과 안내문을 별도 기본 위젯으로 렌더링해 실제 높이를 확보합니다.
-    st.title("⚖️ 선택 한눈에")
+    st.title("⚖️ 합리적 선택 도우미!")
     st.caption("비용과 만족을 입력하면, 비교는 바로 아래에.")
-    with st.expander("⚙ 설정 · 선택지 수 / 1점당 금액 / QR", expanded=True):
+    with st.expander("⚙ 설정 · 선택지 수 / 1점당 금액 / QR", expanded=False):
         st.markdown("**비교 설정**")
         count = st.selectbox("선택지 수", [2, 3, 4], index=0, key="choice_count")
-        rate = int(st.number_input("만족도 1점의 금액 (원)", min_value=1, max_value=1_000_000_000, value=10000, step=1000, key="point_rate"))
+        rate = int(st.number_input("만족도가 1점 높아지면 최대 얼마까지 더 낼 수 있나요? (원)", min_value=1, max_value=1_000_000_000, value=5000, step=1000, key="point_rate"))
         st.caption("모든 선택지에 같은 환산액을 적용합니다. 원 단위 정수로 계산합니다.")
         st.markdown("**QR로 공유**")
         app_url = st.text_input("배포된 앱 주소", placeholder="https://your-app.streamlit.app", key="share_url").strip()
@@ -139,7 +141,23 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
     winners = [row for row in rows if row["economic_profit"] == best]
     names = ", ".join(html.escape(row["name"]) for row in winners)
     title_text = "공동 추천" if len(winners) > 1 else "추천"
-    st.markdown(f'<div class="winner"><b>{title_text} · {names}</b><div class="sub">만족도 1점 = {money(rate)} · 경제적 이윤 기준</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="winner"><b>{title_text} · {names}</b><div class="sub">만족도 1점 = {money(rate)} · 순편익(편익 − 비용) 기준</div></div>', unsafe_allow_html=True)
+    if len(winners) > 1:
+        st.caption("입력 기준상 똑같이 합리적이에요. 고민이 계속되면 동점 선택지 중 하나를 뽑아보세요.")
+        signature = tuple((r["name"], r["cost"], r["satisfaction"], rate) for r in rows)
+        if st.session_state.get("draw_signature") != signature:
+            st.session_state.pop("draw_index", None)
+            st.session_state["draw_signature"] = signature
+        if st.button("🎲 고민 끝내기 · 하나 뽑기", use_container_width=True):
+            st.session_state["draw_index"] = random.choice(winners)["index"]
+        if "draw_index" in st.session_state:
+            picked = rows[st.session_state["draw_index"]]
+            st.success(f"오늘은 {picked['name']}! 경제성이 같아서 무작위로 골랐어요.")
+    else:
+        winner = winners[0]
+        runner = max((r for r in rows if r["index"] != winner["index"]), key=lambda r: r["net_benefit"])
+        gap = winner["net_benefit"] - runner["net_benefit"]
+        st.caption(f"{runner['name']}보다 순편익이 {money(gap)} 높아요. 비용과 추가 만족의 가치를 함께 비교했어요.")
     for row in rows:
         name = html.escape(row["name"])
         profit = row["economic_profit"]
@@ -149,20 +167,20 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 <div class="result-top"><span class="choice-name">{name}{mark}</span><span>이윤 {prefix}{money(profit)}</span></div>
 <div class="metrics"><div class="metric">편익<strong>{money(row['benefit'])}</strong></div><div class="metric">암묵적 비용<strong>{money(row['implicit_cost'])}</strong></div><div class="metric">기회비용<strong>{money(row['opportunity_cost'])}</strong></div></div></div>''', unsafe_allow_html=True)
 
-    st.caption("요청한 합산식에서는 비용이 순편익에서 상쇄되어, 추천 순위는 만족도로 결정됩니다.")
+    st.caption("순편익 = 만족도 × 1점당 추가 지불 의향 − 명시적 비용. 금액 설정에 따라 추천이 달라집니다.")
     with st.popover("ⓘ 계산 기준", use_container_width=True):
         st.markdown("""**하나만 선택하는 상호 배타적인 대안**을 비교합니다.
 
 - 환산 만족 = 만족도 × 1점의 금액
-- **편익 = 명시적 비용 + 환산 만족** (요청한 정의)
-- 순편익 = 편익 − 명시적 비용 = 환산 만족
+- **편익 = 환산 만족**
+- 순편익 = 편익 − 명시적 비용
 - **암묵적 비용 = 포기하는 다른 선택지 중 가장 큰 순편익**
 - **기회비용 = 명시적 비용 + 암묵적 비용**
 - 경제적 이윤 = 편익 − 기회비용
 
-암묵적 비용은 나머지 대안의 합이 아니라 **최선 대안 하나**의 순편익입니다. 동점은 공동 추천합니다. 시간·위험·예산 제약은 별도로 고려하지 않습니다.
+암묵적 비용은 나머지 대안의 합이 아니라 **최선 대안 하나**의 순편익입니다. 동점은 공동 추천하며, 원하면 동점 대안 중 하나를 무작위로 뽑습니다. 시간·위험·예산 제약은 별도로 고려하지 않습니다.
 
-일반적인 비용 대비 만족 비교를 원한다면, 편익을 ‘환산 만족’만으로 정의하고 비용을 차감하는 방식이 더 적합합니다. 이 앱은 요청하신 합산식을 그대로 사용합니다.
+이 앱은 입력한 선택지 중 하나를 반드시 고르는 상황을 비교하며, ‘아무것도 선택하지 않기’는 포함하지 않습니다. 따라서 모든 순편익이 음수이면 암묵적 비용도 음수일 수 있습니다. 만족도 환산은 개인의 주관적인 비교 기준이며 실제 현금 수익을 의미하지 않습니다.
 
 **모바일 안내:** 기본 2개, 최대 4개를 압축 배치했습니다. 아주 작은 화면·가로 모드·확대 글꼴·키보드 표시 중에는 스크롤이 생길 수 있습니다. 설정은 화면 안에서 펼쳐 바꿀 수 있고, 설명은 팝업으로 열립니다. 설정을 접으면 더 컴팩트하게 비교할 수 있습니다.
 
