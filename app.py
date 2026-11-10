@@ -103,12 +103,16 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
     if not st.session_state.get("intro_shown", False):
         intro = st.empty()
         intro.markdown(
-            '<div style="min-height:75vh;display:flex;flex-direction:column;'
-            'align-items:center;justify-content:center;text-align:center;gap:18px;">'
+            '<div style="position:fixed;inset:0;z-index:999999;'
+            'background:#101D33;overflow:hidden;">'
             f'<img src="data:image/jpeg;base64,{LOGO_BASE64}" alt="SW 로고" '
-            'style="width:min(68vw,280px);height:auto;border-radius:24px;">'
-            '<div style="font-size:clamp(17px,4.8vw,24px);font-weight:700;'
-            'line-height:1.6;overflow-wrap:anywhere;">'
+            'style="position:absolute;inset:0;width:100%;height:100%;'
+            'object-fit:cover;object-position:center;border-radius:0;">'
+            '<div style="position:absolute;bottom:0;left:0;right:0;'
+            'padding:60px 20px max(36px,env(safe-area-inset-bottom));'
+            'background:linear-gradient(transparent,rgba(10,20,36,.9));'
+            'text-align:center;color:white;font-size:clamp(17px,4.8vw,26px);'
+            'font-weight:700;line-height:1.6;overflow-wrap:anywhere;">'
             'smart way-합리적 선택, 당신 손 안에</div></div>',
             unsafe_allow_html=True,
         )
