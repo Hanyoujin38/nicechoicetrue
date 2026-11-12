@@ -99,7 +99,7 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 """, unsafe_allow_html=True)
 
     # 제목과 안내문을 별도 기본 위젯으로 렌더링해 실제 높이를 확보합니다.
-    # 첫 접속에만 로고와 슬로건을 0.5초 표시합니다.
+    # 첫 접속에만 로고와 슬로건을 0.9초 표시합니다.
     if not st.session_state.get("intro_shown", False):
         intro = st.empty()
         intro.markdown(
@@ -110,16 +110,16 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
             '<div style="position:fixed;inset:0;z-index:999999;overflow:hidden;'
             'background:#F7F9FC;display:flex;flex-direction:column;'
             'align-items:center;justify-content:center;gap:24px;padding:24px;'
-            'box-sizing:border-box;text-align:center;animation:swFade .5s ease-in forwards;">'
+            'box-sizing:border-box;text-align:center;animation:swFade .9s ease-in forwards;">'
             f'<img src="data:image/png;base64,{LOGO_BASE64}" alt="SW 로고" '
             'style="width:min(52vw,210px);max-height:35vh;object-fit:contain;'
-            'height:auto;background:transparent;animation:swZoomOut .5s cubic-bezier(.4,0,1,1) forwards;">'
+            'height:auto;background:transparent;animation:swZoomOut .9s cubic-bezier(.4,0,1,1) forwards;">'
             '<div style="color:#18243B;font-size:clamp(16px,4.5vw,23px);'
             'font-weight:700;line-height:1.6;overflow-wrap:anywhere;">'
             'smart way-합리적 선택, 당신 손 안에</div></div>',
             unsafe_allow_html=True,
         )
-        time.sleep(0.5)
+        time.sleep(0.9)
         intro.empty()
         st.session_state["intro_shown"] = True
     # 별도 설정 화면 없이 필수 항목만 메인에 바로 배치합니다.
