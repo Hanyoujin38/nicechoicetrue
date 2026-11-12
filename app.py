@@ -114,9 +114,7 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
             f'<img src="data:image/png;base64,{LOGO_BASE64}" alt="SW 로고" '
             'style="width:min(52vw,210px);max-height:35vh;object-fit:contain;'
             'height:auto;background:transparent;animation:swZoomOut .9s cubic-bezier(.4,0,1,1) forwards;">'
-            '<div style="color:#18243B;font-size:clamp(16px,4.5vw,23px);'
-            'font-weight:700;line-height:1.6;overflow-wrap:anywhere;">'
-            'smart way-합리적 선택, 당신 손 안에</div></div>',
+            '</div>',
             unsafe_allow_html=True,
         )
         time.sleep(0.9)
