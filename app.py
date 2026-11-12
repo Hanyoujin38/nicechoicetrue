@@ -99,27 +99,32 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 """, unsafe_allow_html=True)
 
     # 제목과 안내문을 별도 기본 위젯으로 렌더링해 실제 높이를 확보합니다.
-    # 첫 접속에만 로고와 슬로건을 1.5초 표시합니다.
+    # 첫 접속에만 로고와 슬로건을 0.5초 표시합니다.
     if not st.session_state.get("intro_shown", False):
         intro = st.empty()
         intro.markdown(
-            '<div style="position:fixed;inset:0;z-index:999999;'
+            '<style>@keyframes swZoomOut{0%{transform:scale(1);opacity:1;}'
+            '65%{transform:scale(1.7);opacity:1;}'
+            '100%{transform:scale(4);opacity:0;}}'
+            '@keyframes swFade{0%,70%{opacity:1;}100%{opacity:0;}}</style>'
+            '<div style="position:fixed;inset:0;z-index:999999;overflow:hidden;'
             'background:#F7F9FC;display:flex;flex-direction:column;'
             'align-items:center;justify-content:center;gap:24px;padding:24px;'
-            'box-sizing:border-box;text-align:center;">'
+            'box-sizing:border-box;text-align:center;animation:swFade .5s ease-in forwards;">'
             f'<img src="data:image/png;base64,{LOGO_BASE64}" alt="SW 로고" '
             'style="width:min(52vw,210px);max-height:35vh;object-fit:contain;'
-            'height:auto;background:transparent;">'
+            'height:auto;background:transparent;animation:swZoomOut .5s cubic-bezier(.4,0,1,1) forwards;">'
             '<div style="color:#18243B;font-size:clamp(16px,4.5vw,23px);'
             'font-weight:700;line-height:1.6;overflow-wrap:anywhere;">'
             'smart way-합리적 선택, 당신 손 안에</div></div>',
             unsafe_allow_html=True,
         )
-        time.sleep(1.5)
+        time.sleep(0.5)
         intro.empty()
         st.session_state["intro_shown"] = True
     # 별도 설정 화면 없이 필수 항목만 메인에 바로 배치합니다.
-    count = st.selectbox("선택지 수", [2, 3, 4], index=0, key="choice_count")
+    st.session_state.setdefault("active_choice_count", 2)
+    count = st.session_state["active_choice_count"]
     rate = int(st.number_input(
         "만족도가 1점 높아지면 최대 얼마까지 더 낼 수 있나요? (원)",
         min_value=1, max_value=1_000_000_000,
@@ -141,6 +146,14 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
         with c:
             satisfaction = int(st.number_input(f"선택지 {i + 1} 만족도", min_value=1, max_value=10, value=min(7 + i, 10), step=1, key=f"satisfaction_{i}", label_visibility="collapsed"))
         choices.append({"name": name, "cost": cost, "satisfaction": satisfaction})
+
+    if count < 4:
+        if st.button("＋ 선택지 추가", key="add_choice", use_container_width=True):
+            st.session_state["active_choice_count"] = count + 1
+            st.session_state.pop("draw_index", None)
+            st.rerun()
+    else:
+        st.caption("선택지는 최대 4개까지 추가할 수 있어요.")
 
     rows = compare_choices(choices, rate)
     best = max(row["economic_profit"] for row in rows)
@@ -189,7 +202,7 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
 
 이 앱은 입력한 선택지 중 하나를 반드시 고르는 상황을 비교하며, ‘아무것도 선택하지 않기’는 포함하지 않습니다. 따라서 모든 순편익이 음수이면 암묵적 비용도 음수일 수 있습니다. 만족도 환산은 개인의 주관적인 비교 기준이며 실제 현금 수익을 의미하지 않습니다.
 
-**모바일 안내:** 기본 2개, 최대 4개를 압축 배치했습니다. 아주 작은 화면·가로 모드·확대 글꼴·키보드 표시 중에는 스크롤이 생길 수 있습니다. 선택지 수와 1점당 추가 지불 의향은 메인 화면에서 바로 변경합니다.
+**모바일 안내:** 기본 2개, 최대 4개를 압축 배치했습니다. 아주 작은 화면·가로 모드·확대 글꼴·키보드 표시 중에는 스크롤이 생길 수 있습니다. 기본 선택지 2개 아래의 추가 버튼으로 최대 4개까지 늘릴 수 있습니다. 1점당 추가 지불 의향은 메인 화면에서 바로 변경합니다.
 
 **배포:** GitHub 저장소 루트에 `app.py`, `requirements.txt` → Streamlit Community Cloud에서 해당 저장소와 `app.py` 선택 → 배포 주소로 QR코드를 만들어 공유합니다. GitHub 자체는 Python 앱 실행 서버가 아니므로 Streamlit 배포가 필요합니다.
 
