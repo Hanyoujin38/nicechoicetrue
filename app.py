@@ -56,7 +56,26 @@ def main() -> None:
     st.set_page_config(page_title="합리적 선택 도우미!", page_icon=BytesIO(base64.b64decode(LOGO_BASE64)), layout="centered", initial_sidebar_state="collapsed")
     st.markdown("""
 <style>
-.stApp {background:#F7F9FC; color:#18243B;}
+/* 야간 테마의 흰 글씨와 기존 밝은 배경이 섞이지 않도록 앱 색상을 통일합니다. */
+:root {color-scheme:light;}
+.stApp {background:#F7F9FC; color:#18243B; color-scheme:light;
+--text-color:#18243B; --background-color:#F7F9FC;
+--secondary-background-color:#FFFFFF;}
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p,
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {color:#46566D !important;}
+[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input {
+color:#18243B !important; -webkit-text-fill-color:#18243B !important;
+background:#FFFFFF !important; caret-color:#18243B; color-scheme:light;}
+[data-testid="stTextInput"] input::placeholder {color:#68758A !important; -webkit-text-fill-color:#68758A !important;}
+[data-baseweb="input"], [data-baseweb="base-input"] {background:#FFFFFF !important; border-color:#AAB8CA !important;}
+[data-testid="stButton"] button, [data-testid="stPopover"] button {
+background:#FFFFFF !important; color:#18243B !important; border:1px solid #AAB8CA !important;}
+[data-testid="stButton"] button p, [data-testid="stPopover"] button p {color:#18243B !important;}
+[data-testid="stPopoverBody"] {background:#FFFFFF !important; color:#18243B !important;}
+[data-testid="stPopoverBody"] [data-testid="stMarkdownContainer"] {color:#18243B !important;}
+[data-testid="stAlert"] {background:#E7F5EF !important; color:#145C42 !important;}
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] {color:#145C42 !important;}
+
 .block-container {max-width:600px; padding:0.65rem 0.7rem 0.65rem !important;}
 header[data-testid="stHeader"] {height:0; background:transparent;}
 [data-testid="stToolbar"], #MainMenu, footer {display:none;}
