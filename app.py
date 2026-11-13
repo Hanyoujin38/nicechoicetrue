@@ -59,10 +59,13 @@ def money(value: int) -> str:
 
 
 def family_api(table, method="GET", payload=None, query=""):
-    url = st.secrets.get("SUPABASE_URL", "").rstrip("/")
-    key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    try:
+        url = st.secrets.get("SUPABASE_URL", "").rstrip("/")
+        key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    except Exception:
+        raise ValueError("저장소 설정이 없습니다. Streamlit Secrets에 SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY를 입력해주세요.") from None
     if not url or not key:
-        raise ValueError("가족 공유용 저장소가 아직 연결되지 않았습니다. 배포 안내를 확인해주세요.")
+        raise ValueError("저장소 연결 정보가 비어 있습니다. Streamlit Secrets의 URL과 서비스 역할 키를 확인해주세요.")
     req = urllib.request.Request(
         f"{url}/rest/v1/{table}{query}",
         data=json.dumps(payload).encode() if payload is not None else None,
@@ -70,42 +73,67 @@ def family_api(table, method="GET", payload=None, query=""):
                  "Content-Type": "application/json", "Prefer": "return=representation"},
         method=method,
     )
-    with urllib.request.urlopen(req, timeout=15) as response:
-        raw = response.read()
-        return json.loads(raw) if raw else []
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            raw = response.read()
+            return json.loads(raw) if raw else []
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            message = "저장소 인증/권한 오류입니다. 서비스 역할 키와 테이블 권한을 확인해주세요."
+        elif exc.code == 404:
+            message = "가족방 테이블이 없습니다. 배포 안내의 SQL을 먼저 실행해주세요."
+        elif exc.code == 409:
+            message = "저장 충돌이 발생했습니다. 다시 시도해주세요."
+        else:
+            message = f"저장소 요청 실패(HTTP {exc.code}). 테이블 구성과 연결 설정을 확인해주세요."
+        raise ValueError(message) from None
+    except (urllib.error.URLError, TimeoutError):
+        raise ValueError("저장소에 연결할 수 없습니다. 프로젝트 URL과 네트워크 상태를 확인해주세요.") from None
 
 
-def family_panel(rows):
+def family_panel(rows=None):
     st.divider()
     st.subheader("🏡 가족 이야기")
     st.caption("이름·별명 없이 모두 익명으로 참여합니다. 초대 코드로만 입장해요.")
     if "family_hash" not in st.session_state:
         st.caption("초대 코드를 가진 사람은 결과와 댓글을 볼 수 있어요. 믿을 수 있는 가족에게만 공유하세요.")
-        name = "익명"
-        code = st.text_input("가족 초대 코드", type="password", max_chars=40)
+        code = st.text_input("가족 초대 코드", type="password", max_chars=40, key="join_code")
         if st.button("코드로 참여", use_container_width=True):
-            try:
-                digest = hashlib.sha256(code.strip().upper().encode()).hexdigest()
-                found = family_api("sw_rooms", query=f"?code_hash=eq.{digest}&select=code_hash")
-                if not found:
-                    st.warning("올바른 초대 코드를 입력해주세요.")
-                else:
-                    st.session_state["family_hash"] = digest
-                    st.rerun()
-            except Exception:
-                st.error("가족방 연결에 실패했습니다. 저장소 연결 설정과 코드를 확인해주세요.")
-        if st.button("새 가족방 만들기", use_container_width=True):
-            if False:
-                st.warning("초대 코드를 확인해주세요.")
+            if not code.strip():
+                st.warning("초대 코드를 입력해주세요.")
             else:
                 try:
-                    invite = secrets.token_hex(8).upper()
-                    digest = hashlib.sha256(invite.encode()).hexdigest()
-                    family_api("sw_rooms", "POST", {"code_hash": digest})
-                    st.session_state.update(family_hash=digest, family_invite=invite)
-                    st.rerun()
+                    digest = hashlib.sha256(code.strip().upper().encode()).hexdigest()
+                    found = family_api("sw_rooms", query=f"?code_hash=eq.{digest}&select=code_hash")
+                except ValueError as exc:
+                    st.error(str(exc))
                 except Exception:
-                    st.error("가족방 생성에 실패했습니다. 배포 안내의 저장소 설정을 확인해주세요.")
+                    st.error("가족방 응답을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.")
+                else:
+                    if found:
+                        st.session_state["family_hash"] = digest
+                        st.rerun()
+                    else:
+                        st.warning("일치하는 가족방이 없습니다. 코드를 확인해주세요.")
+        if st.button("새 가족방 만들기", use_container_width=True):
+            try:
+                invite = secrets.token_hex(8).upper()
+                digest = hashlib.sha256(invite.encode()).hexdigest()
+                created = family_api("sw_rooms", "POST", {"code_hash": digest})
+                if not created:
+                    raise ValueError("가족방 저장 확인에 실패했습니다. 테이블 권한을 확인해주세요.")
+            except ValueError as exc:
+                st.error(str(exc))
+            except Exception:
+                st.error("가족방 생성 중 오류가 발생했습니다. 저장소 연결을 확인해주세요.")
+            else:
+                st.session_state.update(family_hash=digest, family_invite=invite)
+                st.rerun()
+        return
+    if rows is None:
+        st.success("익명 가족방에 연결됐어요. 아래에서 선택지를 비교하세요.")
+        if st.session_state.get("family_invite"):
+            st.code(st.session_state["family_invite"], language=None)
         return
     digest = st.session_state["family_hash"]
     if st.session_state.get("family_invite"):
@@ -239,6 +267,11 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
         intro.empty()
         st.session_state["intro_shown"] = True
     mode = st.radio("이용 방식", ["개인", "가족"], horizontal=True, key="usage_mode")
+    if mode == "가족":
+        family_panel()
+        if "family_hash" not in st.session_state:
+            st.stop()
+
     # 별도 설정 화면 없이 필수 항목만 메인에 바로 배치합니다.
     st.session_state.setdefault("active_choice_count", 2)
     count = st.session_state["active_choice_count"]
