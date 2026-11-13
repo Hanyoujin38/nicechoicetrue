@@ -115,20 +115,29 @@ def family_panel(rows=None):
                         st.rerun()
                     else:
                         st.warning("일치하는 가족방이 없습니다. 코드를 확인해주세요.")
-        if st.button("새 가족방 만들기", use_container_width=True):
-            try:
-                invite = secrets.token_hex(8).upper()
-                digest = hashlib.sha256(invite.encode()).hexdigest()
-                created = family_api("sw_rooms", "POST", {"code_hash": digest})
-                if not created:
-                    raise ValueError("가족방 저장 확인에 실패했습니다. 테이블 권한을 확인해주세요.")
-            except ValueError as exc:
-                st.error(str(exc))
-            except Exception:
-                st.error("가족방 생성 중 오류가 발생했습니다. 저장소 연결을 확인해주세요.")
+        st.caption("새 가족방을 만들려면 원하는 코드를 정해주세요. 영문·숫자 조합 8~32자이며 대소문자는 구분하지 않아요.")
+        new_code = st.text_input("내가 정할 가족 코드", type="password", max_chars=32, key="new_family_code")
+        if st.button("이 코드로 새 가족방 만들기", use_container_width=True):
+            invite = new_code.strip().upper()
+            if not (8 <= len(invite) <= 32 and invite.isascii() and invite.isalnum()
+                    and any(c.isalpha() for c in invite) and any(c.isdigit() for c in invite)):
+                st.warning("영문과 숫자를 모두 포함해 8~32자로 정해주세요. 공백과 특수문자는 사용할 수 없어요.")
             else:
-                st.session_state.update(family_hash=digest, family_invite=invite)
-                st.rerun()
+                try:
+                    digest = hashlib.sha256(invite.encode()).hexdigest()
+                    existing = family_api("sw_rooms", query=f"?code_hash=eq.{digest}&select=code_hash")
+                    if existing:
+                        raise ValueError("이미 사용 중인 코드예요. 다른 코드를 정하거나 위의 코드로 참여를 이용해주세요.")
+                    created = family_api("sw_rooms", "POST", {"code_hash": digest})
+                    if not created:
+                        raise ValueError("가족방 저장 확인에 실패했습니다. 테이블 권한을 확인해주세요.")
+                except ValueError as exc:
+                    st.error(str(exc))
+                except Exception:
+                    st.error("가족방 생성 중 오류가 발생했습니다. 저장소 연결을 확인해주세요.")
+                else:
+                    st.session_state.update(family_hash=digest, family_invite=invite)
+                    st.rerun()
         return
     if rows is None:
         st.success("익명 가족방에 연결됐어요. 아래에서 선택지를 비교하세요.")
