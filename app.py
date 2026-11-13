@@ -11,6 +11,11 @@ import html
 import random
 import time
 import base64
+import secrets
+import hashlib
+import json
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse
 
 import qrcode
@@ -50,6 +55,100 @@ def compare_choices(choices: list[dict], won_per_point: int) -> list[dict]:
 def money(value: int) -> str:
     """휴대폰에서도 줄바꿈을 줄이는 정확한 원 단위 표시."""
     return f"{value:,}원"
+
+
+
+def family_api(table, method="GET", payload=None, query=""):
+    url = st.secrets.get("SUPABASE_URL", "").rstrip("/")
+    key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key:
+        raise ValueError("가족 공유용 저장소가 아직 연결되지 않았습니다. 배포 안내를 확인해주세요.")
+    req = urllib.request.Request(
+        f"{url}/rest/v1/{table}{query}",
+        data=json.dumps(payload).encode() if payload is not None else None,
+        headers={"apikey": key, "Authorization": f"Bearer {key}",
+                 "Content-Type": "application/json", "Prefer": "return=representation"},
+        method=method,
+    )
+    with urllib.request.urlopen(req, timeout=15) as response:
+        raw = response.read()
+        return json.loads(raw) if raw else []
+
+
+def family_panel(rows):
+    st.divider()
+    st.subheader("🏡 가족 이야기")
+    st.caption("이름·별명 없이 모두 익명으로 참여합니다. 초대 코드로만 입장해요.")
+    if "family_hash" not in st.session_state:
+        st.caption("초대 코드를 가진 사람은 결과와 댓글을 볼 수 있어요. 믿을 수 있는 가족에게만 공유하세요.")
+        name = "익명"
+        code = st.text_input("가족 초대 코드", type="password", max_chars=40)
+        if st.button("코드로 참여", use_container_width=True):
+            try:
+                digest = hashlib.sha256(code.strip().upper().encode()).hexdigest()
+                found = family_api("sw_rooms", query=f"?code_hash=eq.{digest}&select=code_hash")
+                if not found:
+                    st.warning("올바른 초대 코드를 입력해주세요.")
+                else:
+                    st.session_state["family_hash"] = digest
+                    st.rerun()
+            except Exception:
+                st.error("가족방 연결에 실패했습니다. 저장소 연결 설정과 코드를 확인해주세요.")
+        if st.button("새 가족방 만들기", use_container_width=True):
+            if False:
+                st.warning("초대 코드를 확인해주세요.")
+            else:
+                try:
+                    invite = secrets.token_hex(8).upper()
+                    digest = hashlib.sha256(invite.encode()).hexdigest()
+                    family_api("sw_rooms", "POST", {"code_hash": digest})
+                    st.session_state.update(family_hash=digest, family_invite=invite)
+                    st.rerun()
+                except Exception:
+                    st.error("가족방 생성에 실패했습니다. 배포 안내의 저장소 설정을 확인해주세요.")
+        return
+    digest = st.session_state["family_hash"]
+    if st.session_state.get("family_invite"):
+        st.caption("가족에게 아래 초대 코드를 전달하세요. 비밀번호처럼 관리해주세요.")
+        st.code(st.session_state["family_invite"], language=None)
+    if st.button("가족방 나가기"):
+        for key in ("family_hash", "family_invite"):
+            st.session_state.pop(key, None)
+        st.rerun()
+    if st.button("현재 비교 결과 가족에게 공유", use_container_width=True):
+        try:
+            family_api("sw_posts", "POST", {"room_hash": digest,
+                "author": "익명", "kind": "result",
+                "body": json.dumps(rows, ensure_ascii=False)})
+            st.success("결과를 공유했어요!")
+        except Exception:
+            st.error("공유에 실패했어요. 잠시 후 다시 시도해주세요.")
+    with st.form("family_comment", clear_on_submit=True):
+        message = st.text_input("가족에게 한마디", max_chars=500)
+        send = st.form_submit_button("댓글 보내기")
+    if send and message.strip():
+        try:
+            family_api("sw_posts", "POST", {"room_hash": digest,
+                "author": "익명",
+                "kind": "comment", "body": message.strip()})
+        except Exception:
+            st.error("댓글 전송에 실패했어요.")
+    st.button("새 소식 새로고침")
+    try:
+        posts = family_api("sw_posts", query=f"?room_hash=eq.{digest}&order=created_at.desc&limit=30")
+        for post in posts:
+            with st.container(border=True):
+                st.caption(f"익명 · {post['created_at'][:16].replace('T', ' ')} UTC")
+                if post["kind"] == "comment":
+                    st.text(post["body"])
+                else:
+                    shared = json.loads(post["body"])
+                    best = max(x["net"] for x in shared)
+                    st.write("추천: " + " · ".join(x["name"] for x in shared if x["net"] == best))
+                    for x in shared:
+                        st.text(f"{x['name']} · 지출 {money(x['cost'])} · 만족 {x['satisfaction']}점")
+    except Exception:
+        st.error("가족 소식을 불러오지 못했어요. 연결을 확인해주세요.")
 
 
 def main() -> None:
@@ -139,6 +238,7 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
         time.sleep(0.9)
         intro.empty()
         st.session_state["intro_shown"] = True
+    mode = st.radio("이용 방식", ["개인", "가족"], horizontal=True, key="usage_mode")
     # 별도 설정 화면 없이 필수 항목만 메인에 바로 배치합니다.
     st.session_state.setdefault("active_choice_count", 2)
     count = st.session_state["active_choice_count"]
@@ -149,82 +249,39 @@ header[data-testid="stHeader"] {height:0; background:transparent;}
     ))
     st.caption("실제 지출을 먼저 확인하고, 추가 만족에 더 낼 가치가 있는지 비교하세요.")
 
-    a, b, c = st.columns([1.15, 1.35, 1])
-    a.markdown('<div class="colhead">선택지</div>', unsafe_allow_html=True)
-    b.markdown('<div class="colhead">명시적 비용 · 원</div>', unsafe_allow_html=True)
-    c.markdown('<div class="colhead">만족 · 1~10</div>', unsafe_allow_html=True)
     choices = []
     for i in range(count):
         a, b, c = st.columns([1.15, 1.35, 1])
         with a:
-            name = st.text_input(f"선택지 {i + 1} 이름", value=f"선택 {chr(65 + i)}", key=f"name_{i}", max_chars=20, label_visibility="collapsed")
+            name = st.text_input("선택지", value=f"선택 {i+1}", key=f"name_{i}", max_chars=30)
         with b:
-            cost = int(st.number_input(f"선택지 {i + 1} 비용 (원)", min_value=0, max_value=1_000_000_000, value=10000 + 5000 * i, step=1000, key=f"cost_{i}", label_visibility="collapsed"))
+            cost = st.number_input("실제 지출(원)", min_value=0, max_value=1_000_000_000, value=8000, step=1000, key=f"cost_{i}")
         with c:
-            satisfaction = int(st.number_input(f"선택지 {i + 1} 만족도", min_value=1, max_value=10, value=min(7 + i, 10), step=1, key=f"satisfaction_{i}", label_visibility="collapsed"))
-        choices.append({"name": name, "cost": cost, "satisfaction": satisfaction})
-
-    if count < 4:
-        if st.button("＋ 선택지 추가", key="add_choice", use_container_width=True):
-            st.session_state["active_choice_count"] = count + 1
-            st.session_state.pop("draw_index", None)
-            st.rerun()
-    else:
-        st.caption("선택지는 최대 4개까지 추가할 수 있어요.")
-
-    rows = compare_choices(choices, rate)
-    best = max(row["economic_profit"] for row in rows)
-    winners = [row for row in rows if row["economic_profit"] == best]
-    names = ", ".join(html.escape(row["name"]) for row in winners)
-    title_text = "공동 추천" if len(winners) > 1 else "추천"
-    st.markdown(f'<div class="winner"><b>{title_text} · {names}</b><div class="sub">만족도 1점 = {money(rate)} · 순편익(편익 − 비용) 기준</div></div>', unsafe_allow_html=True)
-    if len(winners) > 1:
-        st.caption("입력 기준상 똑같이 합리적이에요. 고민이 계속되면 동점 선택지 중 하나를 뽑아보세요.")
-        signature = tuple((r["name"], r["cost"], r["satisfaction"], rate) for r in rows)
-        if st.session_state.get("draw_signature") != signature:
-            st.session_state.pop("draw_index", None)
-            st.session_state["draw_signature"] = signature
-        if st.button("🎲 고민 끝내기 · 하나 뽑기", use_container_width=True):
-            st.session_state["draw_index"] = random.choice(winners)["index"]
-        if "draw_index" in st.session_state:
-            picked = rows[st.session_state["draw_index"]]
-            st.success(f"오늘은 {picked['name']}! 경제성이 같아서 무작위로 골랐어요.")
-    else:
-        winner = winners[0]
-        runner = max((r for r in rows if r["index"] != winner["index"]), key=lambda r: r["net_benefit"])
-        gap = winner["net_benefit"] - runner["net_benefit"]
-        st.caption(f"{runner['name']}보다 순편익이 {money(gap)} 높아요. 비용과 추가 만족의 가치를 함께 비교했어요.")
-    for row in rows:
-        name = html.escape(row["name"])
-        profit = row["economic_profit"]
-        prefix = "+" if profit > 0 else ""
-        mark = " ✓" if row["economic_profit"] == best else ""
-        st.markdown(f'''<div class="result">
-<div class="result-top"><span class="choice-name">{name}{mark}</span><span>이윤 {prefix}{money(profit)}</span></div>
-<div style="font-size:16px;font-weight:800;margin-top:6px;line-height:1.6;">실제 지출 · {money(row['cost'])}</div>
-<div class="metrics"><div class="metric">편익<strong>{money(row['benefit'])}</strong></div><div class="metric">암묵적 비용<strong>{money(row['implicit_cost'])}</strong></div><div class="metric">기회비용<strong>{money(row['opportunity_cost'])}</strong></div></div></div>''', unsafe_allow_html=True)
-
-    st.caption("순편익 = 만족도 × 1점당 추가 지불 의향 − 명시적 비용. 금액 설정에 따라 추천이 달라집니다.")
-    with st.popover("ⓘ 계산 기준", use_container_width=True):
-        st.markdown("""**하나만 선택하는 상호 배타적인 대안**을 비교합니다.
-
-- 환산 만족 = 만족도 × 1점의 금액
-- **편익 = 환산 만족**
-- 순편익 = 편익 − 명시적 비용
-- **암묵적 비용 = 포기하는 다른 선택지 중 가장 큰 순편익**
-- **기회비용 = 명시적 비용 + 암묵적 비용**
-- 경제적 이윤 = 편익 − 기회비용
-
-암묵적 비용은 나머지 대안의 합이 아니라 **최선 대안 하나**의 순편익입니다. 동점은 공동 추천하며, 원하면 동점 대안 중 하나를 무작위로 뽑습니다. 시간·위험·예산 제약은 별도로 고려하지 않습니다.
-
-이 앱은 입력한 선택지 중 하나를 반드시 고르는 상황을 비교하며, ‘아무것도 선택하지 않기’는 포함하지 않습니다. 따라서 모든 순편익이 음수이면 암묵적 비용도 음수일 수 있습니다. 만족도 환산은 개인의 주관적인 비교 기준이며 실제 현금 수익을 의미하지 않습니다.
-
-**모바일 안내:** 기본 2개, 최대 4개를 압축 배치했습니다. 아주 작은 화면·가로 모드·확대 글꼴·키보드 표시 중에는 스크롤이 생길 수 있습니다. 기본 선택지 2개 아래의 추가 버튼으로 최대 4개까지 늘릴 수 있습니다. 1점당 추가 지불 의향은 메인 화면에서 바로 변경합니다.
-
-**배포:** GitHub 저장소 루트에 `app.py`, `requirements.txt` → Streamlit Community Cloud에서 해당 저장소와 `app.py` 선택 → 배포 주소로 QR코드를 만들어 공유합니다. GitHub 자체는 Python 앱 실행 서버가 아니므로 Streamlit 배포가 필요합니다.
-
-입력값은 서버의 현재 Streamlit 세션에서 처리되며, 앱에서 별도 파일이나 데이터베이스로 저장하지 않습니다. 새 접속 시 기본값으로 시작합니다.
-""")
+            score = st.number_input("만족(1~10)", min_value=1, max_value=10, value=7, key=f"score_{i}")
+        choices.append({"name": name.strip() or f"선택 {i+1}", "cost": int(cost), "satisfaction": int(score)})
+    if count < 4 and st.button("＋ 선택지 추가", use_container_width=True):
+        st.session_state["active_choice_count"] += 1
+        st.rerun()
+    rows = []
+    for choice in choices:
+        benefit = choice["satisfaction"] * rate
+        rows.append(dict(choice, benefit=benefit, net=benefit-choice["cost"]))
+    best = max(x["net"] for x in rows)
+    winners = [x for x in rows if x["net"] == best]
+    st.success("추천: " + " · ".join(x["name"] for x in winners))
+    if len(winners) > 1 and st.button("🎲 고민 끝내기 · 하나 뽑기"):
+        st.info("경제성이 같아서 무작위로 골랐어요: " + random.choice(winners)["name"])
+    for i, row in enumerate(rows):
+        implicit = max(0, max(x["net"] for j, x in enumerate(rows) if i != j))
+        with st.container(border=True):
+            st.write(row["name"])
+            st.markdown(f"### 실제 지출 · {money(row['cost'])}")
+            st.caption(f"만족 {row['satisfaction']}점 · 순편익 {money(row['net'])}")
+            with st.expander("계산 자세히"):
+                st.text(f"편익: {money(row['benefit'])}\n암묵적 비용: {money(implicit)}\n기회비용: {money(row['cost']+implicit)}")
+    st.caption("순편익 = 만족도 × 추가 지불 의향 − 실제 지출. 선택하지 않기의 순편익은 0원으로 가정합니다.")
+    if mode == "가족":
+        family_panel(rows)
 
 
 if __name__ == "__main__":
